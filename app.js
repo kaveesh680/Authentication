@@ -1,13 +1,14 @@
-require('dotenv').config();
+require("dotenv").config();
 const express = require("express");
 const ejs = require("ejs");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
-const session = require('express-session');
+const session = require("express-session");
 const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const findOrCreate = require('mongoose-findorcreate');
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const findOrCreate = require("mongoose-findorcreate");
+const FacebookStrategy = require("passport-facebook");
 
 const app = express();
 
@@ -37,7 +38,8 @@ mongoose.set('useCreateIndex', true);
 const userSchema = new mongoose.Schema({
   email: String,
   password: String,
-  googleId:String
+  googleId:String,
+  facebookId:String
 });
 //Passport-Local Mongoose will add a username, hash and salt field to store the username, the hashed password and the salt value
 userSchema.plugin(passportLocalMongoose);
@@ -58,6 +60,7 @@ passport.deserializeUser(function(id, done) {
   });
 });
 
+//Google
 passport.use(new GoogleStrategy({
     clientID: process.env.CLIENT_ID,
     clientSecret: process.env.CLIENT_SECRET,
@@ -72,6 +75,20 @@ passport.use(new GoogleStrategy({
   }
 ));
 
+//facebook
+passport.use(new FacebookStrategy({
+    clientID: process.env.APP_ID,
+    clientSecret: process.env.APP_SECRET,
+    callbackURL: "http://localhost:3000/auth/facebook/secrets"
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    console.log(profile);
+    User.findOrCreate({ facebookId: profile.id }, function (err, user) {
+      return cb(err, user);
+    });
+  }
+));
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 app.get("/", function(req, res) {
@@ -79,7 +96,7 @@ app.get("/", function(req, res) {
 });
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+//Google
 app.get("/auth/google",
   passport.authenticate('google', { scope: ["profile"] }));
 
@@ -90,12 +107,23 @@ app.get("/auth/google/secrets",
     res.redirect("/secrets");
   });
 
+//Facebook
+app.get("/auth/facebook",
+  passport.authenticate("facebook"));
+
+app.get("/auth/facebook/secrets",
+  passport.authenticate("facebook", { failureRedirect: "/login" }),
+  function(req, res) {
+    // Successful authentication, redirect home.
+    res.redirect("/secrets");
+  });
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 app.route("/logout")
 
 .get(function(req, res){
   req.logout();
-  res.redirect('/');
+  res.redirect("/");
 });
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -133,7 +161,6 @@ app.route("/login")
         });
       }
     });
-
   });
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -156,7 +183,6 @@ app.route("/register")
         });
       }
     });
-
   });
 
 
