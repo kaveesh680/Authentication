@@ -36,10 +36,11 @@ mongoose.set('useCreateIndex', true);
 
 
 const userSchema = new mongoose.Schema({
-  email: String,
+  username:String,
   password: String,
   googleId:String,
-  facebookId:String
+  facebookId:String,
+  secret:String
 });
 //Passport-Local Mongoose will add a username, hash and salt field to store the username, the hashed password and the salt value
 userSchema.plugin(passportLocalMongoose);
@@ -68,8 +69,7 @@ passport.use(new GoogleStrategy({
     userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
   },
   function(accessToken, refreshToken, profile, cb) {
-    console.log(profile);
-    User.findOrCreate({ googleId: profile.id }, function (err, user) {
+    User.findOrCreate({ googleId: profile.id, username : profile.displayName }, function (err, user) {
       return cb(err, user);
     });
   }
@@ -82,7 +82,6 @@ passport.use(new FacebookStrategy({
     callbackURL: "http://localhost:3000/auth/facebook/secrets"
   },
   function(accessToken, refreshToken, profile, cb) {
-    console.log(profile);
     User.findOrCreate({ facebookId: profile.id }, function (err, user) {
       return cb(err, user);
     });
@@ -131,11 +130,41 @@ app.route("/logout")
 app.route("/secrets")
 
 .get(function(req,res){
+  User.find({"secret":{$ne:null}}, function(err,foundUsers){
+    if(err){
+      console.log(err);
+    }else{
+      res.render("secrets",{usersWithSecrets:foundUsers})
+    };
+  });
+});
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+app.route("/submit")
+
+.get(function(req,res){
   if(req.isAuthenticated()){
-    res.render("secrets");
+    res.render("submit");
   }else{
     res.render("login")
   }
+})
+
+.post(function(req,res){
+  const submitSecret = req.body.secret;
+  User.findById(req.user._id,function(err,foundUser){
+    if(err){
+      console.log(err);
+    }else{
+      if(foundUser){
+        foundUser.secret = submitSecret;
+        foundUser.save(function(){
+          res.redirect("/secrets");
+        });
+      }
+    }
+  });
 });
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -148,13 +177,13 @@ app.route("/login")
   .post(function(req, res) {
 
     const user = new User({
-      username : req.body.username,
+      email : req.body.username,
       password : req.body.password
     });
 
     req.login(user,function(err){
       if(err){
-        console.log(err);
+        console.log("err");
       }else{
         passport.authenticate("local")(req,res,function(){
           res.redirect("/secrets")
